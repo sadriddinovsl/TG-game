@@ -1,0 +1,2402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>NEON BREAKER</title>
+
+<!-- Telegram Web App SDK -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Jura:wght@400;500;600;700&subset=cyrillic,latin&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg-0:#05060f;
+    --bg-1:#0a0d1f;
+    --grid:rgba(80,120,255,0.05);
+    --neon-cyan:#19f6ff;
+    --neon-pink:#ff2d95;
+    --text:#eaf6ff;
+    --display:'Orbitron',monospace;
+    --body:'Jura',system-ui,monospace;
+    --nav-h:64px;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  /* ================================================================
+     JURA — forced on every UI text element for RU/UZ consistency
+     font-size and font-weight are pinned here so Cyrillic glyphs
+     render at exactly the same size as Latin ones.
+     ================================================================ */
+  button, input, label, select, textarea,
+  .nav-btn, .btn, .btn-play, .lang-btn, .gc-btn,
+  .section-label, .settings-label, .settings-sub,
+  .coins-label, .slabel, .sval,
+  .stat-pill .slabel, .stats-card .sl,
+  .game-card-desc, .game-card-meta .game-name,
+  .game-card-meta .game-badge,
+  .coming-soon-sub, .coming-soon-badge, .coming-soon-title,
+  .profile-sub, .scorebox .label,
+  .pause-title, .pause-row .settings-label,
+  .card .tag, .card h1,
+  #hint, #overlay, #pause-menu {
+    font-family: 'Jura', system-ui, monospace !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em;
+  }
+  /* Larger labels that need 700 */
+  .btn, .btn-play, #invite-btn, .lang-btn {
+    font-weight: 700 !important;
+    font-size: 14px !important;
+  }
+  /* Orbitron stays on title headings and numeric displays */
+  .card h1, .scorebox .value, .coins-value,
+  .stats-card .sv, .sval {
+    font-family: 'Orbitron', monospace !important;
+    font-weight: 800 !important;
+  }
+
+  /* Global hover: neon glow + lift on all clickable buttons */
+  .btn:hover, .btn-play:hover, .lang-btn:hover,
+  #invite-btn:hover, #hub-play-btn:hover,
+  #resume-btn:hover, #restart-btn:hover {
+    transform: translateY(-2px) scale(1.018);
+    box-shadow: 0 0 20px rgba(25,246,255,0.55), 0 8px 28px rgba(25,246,255,0.3);
+    text-shadow: 0 0 10px rgba(25,246,255,0.6);
+  }
+  .btn.pink:hover, #invite-btn:hover {
+    box-shadow: 0 0 20px rgba(255,45,149,0.6), 0 8px 28px rgba(255,45,149,0.3);
+    text-shadow: 0 0 10px rgba(255,45,149,0.6);
+  }
+  .btn.ghost:hover {
+    box-shadow: 0 0 14px rgba(234,246,255,0.2);
+    border-color: rgba(234,246,255,0.5);
+    text-shadow: 0 0 8px rgba(234,246,255,0.4);
+  }
+  .nav-btn:hover { color: rgba(25,246,255,0.7); text-shadow: 0 0 8px rgba(25,246,255,0.4); }
+  .lang-btn:hover:not(.active) {
+    color: rgba(234,246,255,0.8);
+    background: rgba(25,246,255,0.08);
+    box-shadow: none;
+    transform: none;
+  }
+
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    overflow:hidden;
+    background:var(--bg-0);
+    color:var(--text);
+    font-family:var(--body);
+    user-select:none; -webkit-user-select:none;
+    touch-action:none; overscroll-behavior:none;
+  }
+
+  /* ========== SPA SHELL ========== */
+  #spa-shell{
+    position:fixed; inset:0;
+    display:flex; flex-direction:column;
+    background:var(--bg-0);
+  }
+
+  /* ---- Top bar ---- */
+  #spa-topbar{
+    padding:18px 20px 10px;
+    padding-top:max(18px, env(safe-area-inset-top));
+    background:linear-gradient(180deg, rgba(10,13,31,0.98) 0%, rgba(5,6,15,0.95) 100%);
+    border-bottom:1px solid rgba(25,246,255,0.08);
+    flex-shrink:0;
+  }
+  #spa-topbar h1{
+    margin:0;
+    font-family:var(--display);
+    font-size:20px; font-weight:800; letter-spacing:0.12em;
+    color:var(--neon-cyan);
+    text-shadow:0 0 16px rgba(25,246,255,0.6);
+  }
+  #spa-topbar .sub{
+    font-size:11px; letter-spacing:0.3em; text-transform:uppercase;
+    color:rgba(234,246,255,0.4); margin-top:2px;
+  }
+
+  /* ---- Scrollable content area ---- */
+  #spa-content{
+    flex:1; overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    padding:20px 16px calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
+  }
+
+  /* ---- Tab panels ---- */
+  .tab-panel{ display:none; animation:tabIn 0.22s ease both; }
+  .tab-panel.active{ display:block; }
+  @keyframes tabIn{ from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+
+  /* ---- Bottom Nav ---- */
+  #spa-nav{
+    position:fixed; bottom:0; left:0; right:0;
+    height:calc(var(--nav-h) + env(safe-area-inset-bottom));
+    padding-bottom:env(safe-area-inset-bottom);
+    background:linear-gradient(0deg, rgba(5,6,15,0.99) 0%, rgba(10,13,31,0.97) 100%);
+    border-top:1px solid rgba(25,246,255,0.12);
+    display:flex; align-items:stretch;
+    z-index:100;
+    backdrop-filter:blur(10px);
+  }
+  .nav-btn{
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:4px;
+    background:none; border:none; cursor:pointer;
+    color:rgba(234,246,255,0.4);
+    font-family:var(--body); font-size:11px; font-weight:700;
+    letter-spacing:0.12em; text-transform:uppercase;
+    transition:color 0.18s ease;
+    position:relative;
+  }
+  .nav-btn .nav-icon{ font-size:22px; line-height:1; }
+  .nav-btn.active{
+    color:var(--neon-cyan);
+    text-shadow:0 0 10px rgba(25,246,255,0.5);
+  }
+  .nav-btn.active::before{
+    content:'';
+    position:absolute; top:0; left:20%; right:20%; height:2px;
+    background:var(--neon-cyan);
+    box-shadow:0 0 8px var(--neon-cyan);
+    border-radius:0 0 4px 4px;
+  }
+  .nav-btn:active{ opacity:0.7; }
+
+  /* ========== GAMES TAB ========== */
+  .section-label{
+    font-size:11px; letter-spacing:0.3em; text-transform:uppercase;
+    color:rgba(234,246,255,0.35); margin-bottom:14px; margin-top:4px;
+  }
+
+  .game-card{
+    background:linear-gradient(135deg, rgba(15,18,45,0.9) 0%, rgba(8,10,24,0.95) 100%);
+    border:1px solid rgba(25,246,255,0.2);
+    border-radius:20px;
+    overflow:hidden;
+    box-shadow:0 12px 40px rgba(0,0,0,0.5), 0 0 30px rgba(25,246,255,0.06);
+    margin-bottom:16px;
+  }
+  .game-card-banner{
+    width:100%; height:140px;
+    background:
+      radial-gradient(ellipse at 30% 50%, rgba(25,246,255,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 70% 30%, rgba(255,45,149,0.12) 0%, transparent 55%),
+      linear-gradient(135deg, #050818 0%, #0a1230 50%, #060a1a 100%);
+    display:flex; align-items:center; justify-content:center;
+    position:relative; overflow:hidden;
+  }
+  .game-card-banner .banner-title{
+    font-family:var(--display);
+    font-size:28px; font-weight:800; letter-spacing:0.1em;
+    color:#fff;
+    text-shadow:0 0 30px rgba(25,246,255,0.8), 0 0 60px rgba(25,246,255,0.4);
+    position:relative; z-index:1;
+  }
+  .banner-orbs{ position:absolute; inset:0; }
+  .banner-orbs span{
+    position:absolute; border-radius:50%;
+    animation:orbFloat 4s ease-in-out infinite;
+  }
+  .banner-orbs span:nth-child(1){
+    width:60px;height:60px;top:10%;left:10%;
+    background:radial-gradient(circle,rgba(25,246,255,0.25),transparent);
+    animation-delay:0s;
+  }
+  .banner-orbs span:nth-child(2){
+    width:40px;height:40px;top:50%;right:15%;
+    background:radial-gradient(circle,rgba(255,45,149,0.2),transparent);
+    animation-delay:1.3s;
+  }
+  .banner-orbs span:nth-child(3){
+    width:80px;height:80px;bottom:-20px;left:40%;
+    background:radial-gradient(circle,rgba(100,80,255,0.15),transparent);
+    animation-delay:0.7s;
+  }
+  @keyframes orbFloat{
+    0%,100%{transform:translateY(0) scale(1)}
+    50%{transform:translateY(-8px) scale(1.08)}
+  }
+
+  .game-card-body{ padding:16px; }
+  .game-card-meta{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .game-card-meta .game-name{
+    font-family:var(--display); font-size:16px; font-weight:800;
+    color:var(--text);
+  }
+  .game-card-meta .game-badge{
+    font-size:10px; font-weight:700; letter-spacing:0.2em;
+    text-transform:uppercase; padding:3px 9px; border-radius:20px;
+    background:rgba(25,246,255,0.12);
+    border:1px solid rgba(25,246,255,0.3);
+    color:var(--neon-cyan);
+  }
+  .game-card-desc{
+    font-size:13px; color:rgba(234,246,255,0.5); line-height:1.5;
+    margin-bottom:14px;
+  }
+  .game-card-stats{
+    display:flex; gap:12px; margin-bottom:16px;
+  }
+  .stat-pill{
+    flex:1; background:rgba(0,0,0,0.3); border-radius:10px;
+    padding:8px 10px; border:1px solid rgba(255,255,255,0.06);
+    text-align:center;
+  }
+  .stat-pill .sval{
+    font-family:var(--display); font-size:14px; font-weight:800;
+    color:var(--neon-cyan);
+  }
+  .stat-pill .slabel{
+    font-size:10px; letter-spacing:0.2em; text-transform:uppercase;
+    color:rgba(234,246,255,0.35); margin-top:2px;
+  }
+
+  .btn-play{
+    display:block; width:100%; border:none; cursor:pointer;
+    font-family:var(--display); font-weight:800; letter-spacing:0.08em;
+    font-size:15px; text-transform:uppercase;
+    padding:14px 16px; border-radius:13px;
+    color:#03121a;
+    background:linear-gradient(100deg, var(--neon-cyan), #6df);
+    box-shadow:0 6px 24px rgba(25,246,255,0.4), 0 0 0 1px rgba(255,255,255,0.2) inset;
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn-play:active{ transform:translateY(2px) scale(.99); box-shadow:0 3px 12px rgba(25,246,255,0.35); }
+
+  /* ========== SHOP TAB ========== */
+  .coming-soon-wrap{
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center; padding:60px 24px; text-align:center;
+  }
+  .coming-soon-icon{ font-size:56px; margin-bottom:16px; }
+  .coming-soon-title{
+    font-family:var(--display); font-size:22px; font-weight:800;
+    color:rgba(234,246,255,0.7); letter-spacing:0.06em;
+    margin-bottom:8px;
+  }
+  .coming-soon-sub{
+    font-size:14px; color:rgba(234,246,255,0.35);
+    letter-spacing:0.1em; text-transform:uppercase;
+  }
+  .coming-soon-badge{
+    margin-top:20px; padding:8px 18px; border-radius:30px;
+    background:rgba(255,45,149,0.1); border:1px solid rgba(255,45,149,0.25);
+    color:var(--neon-pink); font-size:12px; letter-spacing:0.25em;
+    text-transform:uppercase; font-weight:700;
+  }
+
+  /* ========== PROFILE TAB ========== */
+  .profile-hero{
+    background:linear-gradient(135deg, rgba(15,18,45,0.9), rgba(8,10,24,0.95));
+    border:1px solid rgba(25,246,255,0.15); border-radius:20px;
+    padding:24px; text-align:center; margin-bottom:16px;
+  }
+  .profile-avatar{
+    width:68px; height:68px; border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, rgba(25,246,255,0.4), rgba(100,80,255,0.2));
+    border:2px solid rgba(25,246,255,0.4);
+    display:flex; align-items:center; justify-content:center;
+    font-size:30px; margin:0 auto 14px;
+    box-shadow:0 0 20px rgba(25,246,255,0.2);
+  }
+  .profile-username{
+    font-family:var(--display); font-size:16px; font-weight:800;
+    color:var(--text); margin-bottom:4px;
+  }
+  .profile-sub{
+    font-size:12px; color:rgba(234,246,255,0.35);
+    letter-spacing:0.2em; text-transform:uppercase;
+  }
+  .coins-section{
+    background:linear-gradient(135deg, rgba(255,45,149,0.08), rgba(15,18,45,0.9));
+    border:1px solid rgba(255,45,149,0.2); border-radius:20px;
+    padding:20px; margin-bottom:16px; display:flex; align-items:center; gap:16px;
+  }
+  .coins-icon{ font-size:36px; flex-shrink:0; }
+  .coins-info{ flex:1; }
+  .coins-label{
+    font-size:11px; letter-spacing:0.3em; text-transform:uppercase;
+    color:rgba(234,246,255,0.4); margin-bottom:4px;
+  }
+  .coins-value{
+    font-family:var(--display); font-size:32px; font-weight:800;
+    color:var(--neon-pink); text-shadow:0 0 16px rgba(255,45,149,0.5);
+  }
+  .stats-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:12px;
+  }
+  .stats-card{
+    background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07);
+    border-radius:14px; padding:14px; text-align:center;
+  }
+  .stats-card .sv{
+    font-family:var(--display); font-size:22px; font-weight:800;
+    color:var(--neon-cyan);
+  }
+  .stats-card .sl{
+    font-size:10px; letter-spacing:0.2em; text-transform:uppercase;
+    color:rgba(234,246,255,0.35); margin-top:3px;
+  }
+
+  /* ========== GAME OVERLAY (Game Over) ========== */
+  #overlay{
+    position:fixed; inset:0;
+    display:none;
+    align-items:center; justify-content:center;
+    padding:24px;
+    background:rgba(3,4,12,0.82);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    z-index:200;
+    animation:fade .35s ease both;
+  }
+  #overlay.show{ display:flex; }
+
+  @keyframes fade{ from{opacity:0} to{opacity:1} }
+  @keyframes pop{ from{opacity:0; transform:translateY(18px) scale(.94)} to{opacity:1; transform:none} }
+
+  .card{
+    width:100%; max-width:340px;
+    text-align:center;
+    padding:30px 26px 26px;
+    border-radius:22px;
+    background:linear-gradient(160deg, rgba(25,30,60,.9), rgba(8,10,24,.95));
+    border:1px solid rgba(25,246,255,.35);
+    box-shadow:
+      0 0 0 1px rgba(255,45,149,.10) inset,
+      0 18px 60px rgba(0,0,0,.6),
+      0 0 50px rgba(25,246,255,.18);
+    animation:pop .45s cubic-bezier(.2,.9,.25,1) both;
+  }
+
+  .card .tag{
+    font-family:var(--body);
+    letter-spacing:.32em;
+    font-size:12px; font-weight:700;
+    color:var(--neon-pink);
+    text-transform:uppercase;
+    margin:0 0 6px;
+    text-shadow:0 0 12px rgba(255,45,149,.7);
+  }
+  .card h1{
+    font-family:var(--display);
+    font-size:26px; font-weight:800;
+    margin:0 0 18px; letter-spacing:.06em;
+    color:#fff;
+    text-shadow:0 0 18px rgba(25,246,255,.55);
+  }
+  .scorebox{
+    margin:6px auto 10px;
+    padding:14px 10px;
+    border-radius:16px;
+    background:rgba(0,0,0,.35);
+    border:1px solid rgba(25,246,255,.18);
+  }
+  .scorebox .label{
+    font-size:12px; letter-spacing:.28em; text-transform:uppercase;
+    color:rgba(234,246,255,.6); margin-bottom:2px;
+  }
+  .scorebox .value{
+    font-family:var(--display);
+    font-size:46px; font-weight:800; line-height:1;
+    color:var(--neon-cyan);
+    text-shadow:0 0 22px rgba(25,246,255,.6);
+  }
+  .scorebox .value.sm{
+    font-size:32px;
+  }
+
+  .btn{
+    display:block; width:100%;
+    border:none; cursor:pointer;
+    font-family:var(--display);
+    font-weight:800; letter-spacing:.05em;
+    font-size:16px; text-transform:uppercase;
+    padding:15px 16px; border-radius:14px;
+    margin-top:12px;
+    color:#03121a;
+    background:linear-gradient(100deg, var(--neon-cyan), #6df);
+    box-shadow:0 8px 26px rgba(25,246,255,.4), 0 0 0 1px rgba(255,255,255,.25) inset;
+    transition:transform .12s ease, box-shadow .12s ease, opacity .12s;
+  }
+  .btn:active{ transform:translateY(2px) scale(.99); box-shadow:0 4px 14px rgba(25,246,255,.35); }
+
+  .btn.ghost{
+    color:var(--text);
+    background:transparent;
+    border:1px solid rgba(234,246,255,.25);
+    box-shadow:none;
+  }
+  .btn.ghost:active{ background:rgba(255,255,255,.06); }
+
+  .btn.pink{
+    color:#fff;
+    background:linear-gradient(100deg, var(--neon-pink), #ff80b4);
+    box-shadow:0 8px 26px rgba(255,45,149,.35);
+  }
+  .btn.pink:active{ box-shadow:0 4px 14px rgba(255,45,149,.3); }
+
+  #hint{
+    position:fixed; left:0; right:0;
+    bottom:max(18px, env(safe-area-inset-bottom));
+    text-align:center; z-index:155; pointer-events:none;
+    font-size:12px; letter-spacing:.18em; text-transform:uppercase;
+    color:rgba(234,246,255,.45);
+    transition:opacity .4s;
+    padding:0 80px;                      /* keep clear of corner buttons */
+  }
+
+  /* Canvas hidden by default */
+  #game-wrapper{ display:none; }
+  #game-wrapper.active{
+    display:block;
+    position:fixed; inset:0; z-index:150;
+  }
+  #game{
+    display:block;
+    position:fixed; inset:0;
+    width:100%; height:100%;
+    background:
+      radial-gradient(120% 120% at 50% -10%, var(--bg-1) 0%, var(--bg-0) 60%, #02030a 100%);
+  }
+
+  /* ========== PAUSE BUTTON (top-right, standalone) ========== */
+  #pause-btn{
+    position:fixed;
+    top:max(14px, env(safe-area-inset-top));
+    right:14px;
+    width:44px; height:44px;
+    border-radius:12px;
+    border:1px solid rgba(25,246,255,0.2);
+    background:rgba(10,13,31,0.7);
+    color:rgba(234,246,255,0.75);
+    font-size:18px; line-height:1;
+    cursor:pointer;
+    display:none;
+    align-items:center; justify-content:center;
+    z-index:160;
+    opacity:0.35;
+    transition:opacity 0.2s ease, box-shadow 0.2s ease;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+  #game-wrapper.active #pause-btn{ display:flex; }
+  #pause-btn:active{
+    opacity:0.9;
+    box-shadow:0 0 16px rgba(25,246,255,0.55);
+  }
+
+  /* ========== FF BUTTON (bottom-left) ========== */
+  #ff-btn{
+    position:fixed;
+    bottom:max(20px, env(safe-area-inset-bottom));
+    left:16px;
+    z-index:160;
+    width:32px; height:32px;
+    border-radius:8px;
+    border:1px solid rgba(25,246,255,0.15);
+    background:rgba(10,13,31,0.6);
+    color:rgba(234,246,255,0.75);
+    font-size:13px; font-family:'Jura',monospace; font-weight:700;
+    line-height:1;
+    cursor:pointer;
+    display:none;
+    align-items:center; justify-content:center;
+    opacity:0.28;
+    transition:opacity 0.2s;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    user-select:none;
+  }
+  #game-wrapper.active #ff-btn{ display:flex; }
+  #ff-btn:active{
+    opacity:0.9;
+    box-shadow:0 0 8px rgba(25,246,255,0.4);
+  }
+  #ff-btn.active-state{
+    opacity:0.9;
+    border-color:var(--neon-cyan);
+    box-shadow:0 0 8px rgba(25,246,255,0.4);
+  }
+
+  /* ========== RECALL BUTTON (bottom-right) ========== */
+  #recall-btn{
+    position:fixed;
+    bottom:max(20px, env(safe-area-inset-bottom));
+    right:16px;
+    z-index:160;
+    width:32px; height:32px;
+    border-radius:8px;
+    border:none;
+    background:transparent;
+    color:rgba(234,246,255,0.75);
+    font-size:20px; line-height:1;
+    cursor:pointer;
+    display:none;
+    align-items:center; justify-content:center;
+    opacity:0.28;
+    transition:opacity 0.2s;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    user-select:none;
+  }
+  #game-wrapper.active #recall-btn{ display:flex; }
+  #recall-btn:active{ opacity:0.9; }
+  #recall-btn.active-state{ opacity:0.9; }
+
+  /* ========== PAUSE MENU ========== */
+  #pause-menu{
+    position:fixed; inset:0;
+    display:none;
+    align-items:center; justify-content:center;
+    padding:24px;
+    background:rgba(0,0,0,0.70);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    z-index:190;
+    animation:fade .2s ease both;
+  }
+  #pause-menu.show{ display:flex; }
+
+  .pause-card{
+    width:100%; max-width:320px;
+    padding:28px 24px 24px;
+    border-radius:22px;
+    background:rgba(12,15,40,0.72);
+    border:1px solid rgba(25,246,255,.28);
+    box-shadow:
+      0 0 0 1px rgba(255,45,149,.07) inset,
+      0 20px 60px rgba(0,0,0,.7),
+      0 0 60px rgba(25,246,255,.12);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    animation:pop .3s cubic-bezier(.2,.9,.25,1) both;
+  }
+  .pause-title{
+    font-family:'Jura', monospace;
+    font-size:12px; font-weight:700;
+    letter-spacing:.36em; text-transform:uppercase;
+    color:var(--neon-cyan);
+    text-shadow:0 0 16px rgba(25,246,255,.8);
+    text-align:center; margin:0 0 20px;
+  }
+  .pause-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 4px;
+    border-top:1px solid rgba(255,255,255,0.06);
+    border-bottom:1px solid rgba(255,255,255,0.06);
+    margin:12px 0 16px;
+  }
+  .btn-restart{
+    background:transparent !important;
+    color:var(--neon-cyan) !important;
+    border:1px solid rgba(25,246,255,.3) !important;
+    box-shadow:none !important;
+    margin-bottom:0 !important;
+  }
+  .btn-restart:hover{
+    background:rgba(25,246,255,.10) !important;
+    box-shadow:0 0 16px rgba(25,246,255,.4) !important;
+    transform:translateY(-2px) scale(1.018) !important;
+  }
+  .btn-endgame{
+    background:transparent !important;
+    color:var(--neon-pink) !important;
+    border:1px solid rgba(255,45,149,.35) !important;
+    box-shadow:none !important;
+  }
+  .btn-endgame:hover{
+    background:rgba(255,45,149,.12) !important;
+    box-shadow:0 0 16px rgba(255,45,149,.4) !important;
+    transform:translateY(-2px) scale(1.018) !important;
+  }
+
+  /* ========== SETTINGS PANEL ========== */
+  .settings-card{
+    background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.07);
+    border-radius:16px; padding:6px 0; margin-top:16px;
+  }
+  .settings-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px;
+    border-bottom:1px solid rgba(255,255,255,0.05);
+  }
+  .settings-row:last-child{ border-bottom:none; }
+  .settings-label{
+    font-size:13px; font-weight:700; letter-spacing:0.08em;
+    color:rgba(234,246,255,0.75);
+  }
+  .settings-label .settings-sub{
+    display:block; font-size:10px; font-weight:500;
+    letter-spacing:0.15em; text-transform:uppercase;
+    color:rgba(234,246,255,0.35); margin-top:2px;
+  }
+  /* Language pill toggle */
+  .lang-toggle{
+    display:flex; background:rgba(0,0,0,0.35);
+    border-radius:20px; padding:3px; gap:3px;
+    border:1px solid rgba(255,255,255,0.08);
+  }
+  .lang-btn{
+    padding:5px 14px; border-radius:16px; border:none;
+    font-family:var(--body); font-size:12px; font-weight:700;
+    letter-spacing:0.1em; cursor:pointer;
+    background:transparent; color:rgba(234,246,255,0.4);
+    transition:background .15s, color .15s;
+  }
+  .lang-btn.active{
+    background:var(--neon-cyan); color:#03121a;
+    box-shadow:0 0 10px rgba(25,246,255,0.4);
+  }
+  /* Lite mode toggle switch */
+  .toggle-switch{
+    position:relative; width:44px; height:24px;
+    flex-shrink:0; cursor:pointer;
+  }
+  .toggle-switch input{ opacity:0; width:0; height:0; position:absolute; }
+  .toggle-track{
+    position:absolute; inset:0; border-radius:12px;
+    background:rgba(255,255,255,0.12);
+    border:1px solid rgba(255,255,255,0.1);
+    transition:background .2s;
+  }
+  .toggle-switch input:checked + .toggle-track{
+    background:var(--neon-cyan);
+    border-color:var(--neon-cyan);
+    box-shadow:0 0 10px rgba(25,246,255,0.4);
+  }
+  .toggle-thumb{
+    position:absolute; top:3px; left:3px;
+    width:16px; height:16px; border-radius:50%;
+    background:#fff; transition:transform .2s;
+    box-shadow:0 1px 4px rgba(0,0,0,0.4);
+  }
+  .toggle-switch input:checked ~ .toggle-thumb{ transform:translateX(20px); }
+
+  /* ========== LEADERBOARD ========== */
+  .lb-list{ display:flex; flex-direction:column; gap:6px; }
+  .lb-row{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px; border-radius:12px;
+    background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.06);
+    font-family:'Jura',monospace; font-weight:600;
+  }
+  .lb-rank{
+    width:24px; text-align:center;
+    font-family:'Orbitron',monospace; font-size:13px; font-weight:800;
+    color:rgba(234,246,255,0.45);
+  }
+  .lb-medal{ width:22px; text-align:center; font-size:16px; }
+  .lb-name{ flex:1; font-size:14px; color:var(--text); }
+  .lb-score{
+    font-family:'Orbitron',monospace; font-size:14px; font-weight:800;
+    color:var(--neon-cyan);
+    text-shadow:0 0 8px rgba(25,246,255,0.4);
+  }
+  .lb-gold{
+    border-color:rgba(255,215,0,0.25);
+    background:rgba(255,215,0,0.06);
+  }
+  .lb-gold .lb-rank{ color:#ffd700; }
+  .lb-gold .lb-score{ color:#ffd700; text-shadow:0 0 10px rgba(255,215,0,0.5); }
+  .lb-silver{
+    border-color:rgba(192,192,192,0.2);
+    background:rgba(192,192,192,0.04);
+  }
+  .lb-silver .lb-rank{ color:#c0c0c0; }
+  .lb-silver .lb-score{ color:#c0c0c0; text-shadow:0 0 8px rgba(192,192,192,0.4); }
+  .lb-bronze{
+    border-color:rgba(205,127,50,0.2);
+    background:rgba(205,127,50,0.04);
+  }
+  .lb-bronze .lb-rank{ color:#cd7f32; }
+  .lb-bronze .lb-score{ color:#cd7f32; text-shadow:0 0 8px rgba(205,127,50,0.4); }
+  .lb-you-wrap{ margin-top:14px; }
+  .lb-you{
+    border:1.5px solid rgba(25,246,255,0.4);
+    background:rgba(25,246,255,0.06);
+    box-shadow:0 0 16px rgba(25,246,255,0.1);
+  }
+  .lb-you .lb-rank{ color:var(--neon-cyan); }
+  .lb-you .lb-name{ color:var(--neon-cyan); font-weight:700; }
+</style>
+</head>
+<body>
+
+  <!-- ========== SPA SHELL ========== -->
+  <div id="spa-shell">
+    <div id="spa-topbar">
+      <h1>NEON BREAKER</h1>
+      <div class="sub" data-i18n="arcadeHub">Arcade Hub</div>
+    </div>
+
+    <div id="spa-content">
+      <!-- GAMES TAB -->
+      <div class="tab-panel active" id="tab-games">
+        <div class="section-label" data-i18n="featuredGames">Featured Games</div>
+        <div class="game-card">
+          <div class="game-card-banner">
+            <div class="banner-orbs">
+              <span></span><span></span><span></span>
+            </div>
+            <div class="banner-title">NEON BREAKER</div>
+          </div>
+          <div class="game-card-body">
+            <div class="game-card-meta">
+              <span class="game-name">Neon Breaker</span>
+              <span class="game-badge" data-i18n="arcadeBadge">Arcade</span>
+            </div>
+            <div class="game-card-desc" data-i18n="gameDesc">
+              Swipe to aim. Shatter neon blocks across 7 columns. Every round earns a new ball — how far can you go?
+            </div>
+            <div class="game-card-stats">
+              <div class="stat-pill">
+                <div class="sval" id="hub-best-score">—</div>
+                <div class="slabel" data-i18n="statBest">Best</div>
+              </div>
+              <div class="stat-pill">
+                <div class="sval" id="hub-games-played">—</div>
+                <div class="slabel" data-i18n="statGames">Games</div>
+              </div>
+              <div class="stat-pill">
+                <div class="sval" id="hub-best-round">—</div>
+                <div class="slabel" data-i18n="statRound">Round</div>
+              </div>
+            </div>
+            <button class="btn-play" id="hub-play-btn">&#9654; &nbsp; <span data-i18n="playBtn">Play Now</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LEADERBOARD TAB -->
+      <div class="tab-panel" id="tab-leaderboard">
+        <div class="section-label" data-i18n="lbTitle">Leaderboard</div>
+        <div class="lb-list">
+          <div class="lb-row lb-gold"><span class="lb-rank">1</span><span class="lb-medal">🥇</span><span class="lb-name">NeonKing</span><span class="lb-score">4 820</span></div>
+          <div class="lb-row lb-silver"><span class="lb-rank">2</span><span class="lb-medal">🥈</span><span class="lb-name">CyberAce</span><span class="lb-score">3 915</span></div>
+          <div class="lb-row lb-bronze"><span class="lb-rank">3</span><span class="lb-medal">🥉</span><span class="lb-name">GlowMaster</span><span class="lb-score">3 340</span></div>
+          <div class="lb-row"><span class="lb-rank">4</span><span class="lb-medal"></span><span class="lb-name">PixelDust</span><span class="lb-score">2 780</span></div>
+          <div class="lb-row"><span class="lb-rank">5</span><span class="lb-medal"></span><span class="lb-name">ShadowByte</span><span class="lb-score">2 510</span></div>
+          <div class="lb-row"><span class="lb-rank">6</span><span class="lb-medal"></span><span class="lb-name">NovaBlitz</span><span class="lb-score">2 105</span></div>
+          <div class="lb-row"><span class="lb-rank">7</span><span class="lb-medal"></span><span class="lb-name">ZeroGrav</span><span class="lb-score">1 890</span></div>
+          <div class="lb-row"><span class="lb-rank">8</span><span class="lb-medal"></span><span class="lb-name">VoidRunner</span><span class="lb-score">1 640</span></div>
+          <div class="lb-row"><span class="lb-rank">9</span><span class="lb-medal"></span><span class="lb-name">LaserFox</span><span class="lb-score">1 220</span></div>
+          <div class="lb-row"><span class="lb-rank">10</span><span class="lb-medal"></span><span class="lb-name">DarkPulse</span><span class="lb-score">980</span></div>
+        </div>
+        <div class="lb-you-wrap">
+          <div class="lb-row lb-you"><span class="lb-rank">—</span><span class="lb-medal">👾</span><span class="lb-name" data-i18n="lbYou">You</span><span class="lb-score" id="lb-your-score">0</span></div>
+        </div>
+        <div style="text-align:center;margin-top:18px;">
+          <div class="coming-soon-badge" data-i18n="lbComingSoon">Live Rankings — Coming Soon</div>
+        </div>
+      </div>
+
+      <!-- SHOP TAB -->
+      <div class="tab-panel" id="tab-shop">
+        <div class="coming-soon-wrap">
+          <div class="coming-soon-icon">🛒</div>
+          <div class="coming-soon-title" data-i18n="shopTitle">Shop</div>
+          <div class="coming-soon-sub" data-i18n="comingSoon">New items arriving soon</div>
+          <div class="coming-soon-badge" data-i18n="comingSoonBadge">Coming Soon</div>
+        </div>
+      </div>
+
+      <!-- PROFILE TAB -->
+      <div class="tab-panel" id="tab-profile">
+
+        <!-- Avatar + identity -->
+        <div class="profile-hero" style="position:relative;">
+          <div style="position:relative;width:80px;height:80px;margin:0 auto 14px;">
+            <img id="tg-avatar-img"
+                 src=""
+                 alt=""
+                 style="width:80px;height:80px;border-radius:50%;object-fit:cover;
+                        border:2px solid rgba(25,246,255,0.4);
+                        box-shadow:0 0 20px rgba(25,246,255,0.25);
+                        display:none;"
+                 onerror="this.style.display='none';document.getElementById('tg-avatar-fallback').style.display='flex';" />
+            <div id="tg-avatar-fallback"
+                 class="profile-avatar"
+                 style="width:80px;height:80px;margin:0;display:flex;">👾</div>
+          </div>
+          <div class="profile-username" id="tg-first-name">Player</div>
+          <div class="profile-sub" id="tg-user-id">ID: —</div>
+        </div>
+
+        <!-- Coins -->
+        <div class="coins-section">
+          <div class="coins-icon">🪙</div>
+          <div class="coins-info">
+            <div class="coins-label" data-i18n="totalCoins">Total Coins</div>
+            <div class="coins-value" id="profile-coins">0</div>
+          </div>
+        </div>
+
+        <!-- Invite button -->
+        <button id="invite-btn" style="
+            display:block; width:100%; border:none; cursor:pointer;
+            font-family:var(--display); font-weight:800; letter-spacing:0.07em;
+            font-size:14px; text-transform:uppercase;
+            padding:15px 16px; border-radius:13px; margin-bottom:16px;
+            color:#fff;
+            background:linear-gradient(100deg, var(--neon-pink), #ff80b4);
+            box-shadow:0 6px 24px rgba(255,45,149,0.45), 0 0 0 1px rgba(255,255,255,0.15) inset;
+            transition:transform .12s ease, box-shadow .12s ease;">
+          🎁 &nbsp; <span data-i18n="inviteBtn">Invite a Friend (+500)</span>
+        </button>
+
+        <!-- Stats grid -->
+        <div class="stats-grid">
+          <div class="stats-card">
+            <div class="sv" id="profile-best">0</div>
+            <div class="sl" data-i18n="bestScore">Best Score</div>
+          </div>
+          <div class="stats-card">
+            <div class="sv" id="profile-games">0</div>
+            <div class="sl" data-i18n="gamesPlayed">Games Played</div>
+          </div>
+          <div class="stats-card">
+            <div class="sv" id="profile-round">0</div>
+            <div class="sl" data-i18n="bestRound">Best Round</div>
+          </div>
+          <div class="stats-card">
+            <div class="sv" id="profile-total-score">0</div>
+            <div class="sl" data-i18n="totalScore">Total Score</div>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="section-label" style="margin-top:20px;" data-i18n="settingsTitle">Settings</div>
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-label">
+              <span data-i18n="language">Language</span>
+              <span class="settings-sub" data-i18n="languageSub">Interface language</span>
+            </div>
+            <div class="lang-toggle">
+              <button class="lang-btn active" id="lang-ru" onclick="setLang('ru')">RU</button>
+              <button class="lang-btn" id="lang-uz" onclick="setLang('uz')">UZ</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <span data-i18n="liteMode">Lite Mode</span>
+              <span class="settings-sub" data-i18n="liteModeSub">No particles or shake</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="lite-mode-toggle" onchange="setLiteMode(this.checked)">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <nav id="spa-nav">
+      <button class="nav-btn active" data-tab="profile">
+        <span class="nav-icon">👤</span>
+        <span data-i18n="navProfile">Profile</span>
+      </button>
+      <button class="nav-btn" data-tab="games">
+        <span class="nav-icon">🎮</span>
+        <span data-i18n="navGames">Games</span>
+      </button>
+      <button class="nav-btn" data-tab="leaderboard">
+        <span class="nav-icon">🏆</span>
+        <span data-i18n="navLeaderboard">Top</span>
+      </button>
+      <button class="nav-btn" data-tab="shop">
+        <span class="nav-icon">🛒</span>
+        <span data-i18n="navShop">Shop</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ========== GAME WRAPPER (hidden by default) ========== -->
+  <div id="game-wrapper">
+    <canvas id="game"></canvas>
+    <div id="hint" data-i18n="hint">Swipe to aim · Release to fire</div>
+
+    <!-- PAUSE (top-right) -->
+    <button class="gc-btn" id="pause-btn" title="Pause">⏸</button>
+
+    <!-- FF (bottom-left) -->
+    <button id="ff-btn" title="Fast Forward 2x">&gt;&gt;</button>
+
+    <!-- RECALL (bottom-right) -->
+    <button id="recall-btn" title="Recall — finish round">⏹</button>
+
+    <!-- PAUSE MENU OVERLAY -->
+    <div id="pause-menu">
+      <div class="pause-card">
+        <p class="pause-title" data-i18n="paused">PAUSED</p>
+        <button class="btn" id="resume-btn" data-i18n="resume">▶  Resume</button>
+        <div class="pause-row">
+          <div class="settings-label">
+            <span data-i18n="liteMode">Lite Mode</span>
+            <span class="settings-sub" data-i18n="liteModeSub">No particles or shake</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="pause-lite-toggle" onchange="setLiteMode(this.checked)">
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+        <button class="btn btn-restart" id="restart-btn" data-i18n="restart">↺  Restart</button>
+        <button class="btn btn-endgame" id="end-game-btn" data-i18n="endGame">✕  End Game</button>
+      </div>
+    </div>
+
+    <div id="overlay">
+      <div class="card">
+        <p class="tag" data-i18n="gameOver">Game Over</p>
+        <h1>NEON BREAKER</h1>
+        <div class="scorebox">
+          <div class="label" data-i18n="scoreLabel">Score</div>
+          <div class="value" id="finalScore">0</div>
+        </div>
+        <div class="scorebox">
+          <div class="label" data-i18n="roundReached">Round Reached</div>
+          <div class="value sm" id="finalRound">1</div>
+        </div>
+        <button class="btn pink" id="backToMenuBtn" data-i18n="backToMenu">← Back to Menu</button>
+        <button class="btn ghost" id="againBtn" data-i18n="playAgain">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   NEON BREAKER  v3 — SPA Edition
+   Single-file HTML5 Canvas + vanilla JS, mobile-first
+   ========================================================================= */
+
+/* ---------- Telegram init ---------- */
+var TG = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+if (TG) { try { TG.ready(); TG.expand(); } catch (e) {} }
+
+/* ---------- API ---------- */
+var API = 'https://neon-breaker-api-1.onrender.com';
+
+/* ---------- Register player on load ---------- */
+window.addEventListener('load', async function() {
+  if (TG && TG.initData) {
+    try {
+      var res = await fetch(API + '/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          init_data: TG.initData,
+          language: getLS('nb_lang', 'ru')
+        })
+      });
+      var data = await res.json();
+      if (data.stats) {
+        setLS('nb_best_score',   data.stats.best_score);
+        setLS('nb_best_round',   data.stats.best_round);
+        setLS('nb_games_played', data.stats.games_played);
+        setLS('nb_total_score',  data.stats.total_score);
+        localStorage.setItem('total_coins', String(data.stats.total_coins));
+        refreshHubStats();
+        refreshProfileStats();
+      }
+    } catch(e) { console.log('Offline mode'); }
+  }
+});
+
+/* =========================================================================
+   SPA / HUB LOGIC
+   ========================================================================= */
+var spaShell    = document.getElementById('spa-shell');
+var gameWrapper = document.getElementById('game-wrapper');
+
+function showHub(tabId) {
+  gameWrapper.classList.remove('active');
+  spaShell.style.display = 'flex';
+  if (tabId) switchTab(tabId);
+  refreshHubStats();
+  if (tabId === 'profile') refreshProfileStats();
+  if (tabId === 'leaderboard') refreshLeaderboard();
+}
+
+function showGame() {
+  spaShell.style.display = 'none';
+  gameWrapper.classList.add('active');
+  resize();
+}
+
+/* ---- Tab switching ---- */
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+  var panel = document.getElementById('tab-' + tabId);
+  if (panel) panel.classList.add('active');
+  var btn = document.querySelector('[data-tab="' + tabId + '"]');
+  if (btn) btn.classList.add('active');
+}
+
+document.querySelectorAll('.nav-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    switchTab(this.dataset.tab);
+    if (this.dataset.tab === 'profile') refreshProfileStats();
+    if (this.dataset.tab === 'leaderboard') refreshLeaderboard();
+  });
+});
+
+document.getElementById('hub-play-btn').addEventListener('click', function(){
+  showGame();
+  resetGame();
+});
+
+/* ---- localStorage helpers ---- */
+function getLS(key, def) {
+  try { var v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : def; }
+  catch(e){ return def; }
+}
+function setLS(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e){}
+}
+
+function refreshHubStats() {
+  var best = getLS('nb_best_score', 0);
+  var gp   = getLS('nb_games_played', 0);
+  var br   = getLS('nb_best_round', 0);
+  document.getElementById('hub-best-score').textContent   = best || '—';
+  document.getElementById('hub-games-played').textContent = gp   || '—';
+  document.getElementById('hub-best-round').textContent   = br   || '—';
+}
+
+function refreshLeaderboard() {
+  var el = document.getElementById('lb-your-score');
+  if (el) el.textContent = getLS('nb_best_score', 0) || '0';
+}
+
+function refreshProfileStats() {
+  /* --- Telegram user data --- */
+  var user = (TG && TG.initDataUnsafe && TG.initDataUnsafe.user) ? TG.initDataUnsafe.user : null;
+
+  var avatarImg      = document.getElementById('tg-avatar-img');
+  var avatarFallback = document.getElementById('tg-avatar-fallback');
+  var firstNameEl    = document.getElementById('tg-first-name');
+  var userIdEl       = document.getElementById('tg-user-id');
+
+  if (user) {
+    firstNameEl.textContent = (user.first_name || '') + (user.last_name ? ' ' + user.last_name : '');
+    userIdEl.textContent    = 'ID: ' + (user.id || '—');
+    if (user.photo_url) {
+      avatarImg.src = user.photo_url;
+      avatarImg.style.display    = 'block';
+      avatarFallback.style.display = 'none';
+    } else {
+      avatarImg.style.display    = 'none';
+      avatarFallback.style.display = 'flex';
+    }
+  } else {
+    firstNameEl.textContent      = 'Player';
+    userIdEl.textContent         = 'ID: —';
+    avatarImg.style.display      = 'none';
+    avatarFallback.style.display = 'flex';
+  }
+
+  /* --- Game stats from localStorage --- */
+  var coins = parseInt(localStorage.getItem('total_coins') || '0', 10) || 0;
+  var best  = getLS('nb_best_score', 0);
+  var gp    = getLS('nb_games_played', 0);
+  var br    = getLS('nb_best_round', 0);
+  var ts    = getLS('nb_total_score', 0);
+
+  document.getElementById('profile-coins').textContent       = coins;
+  document.getElementById('profile-best').textContent        = best;
+  document.getElementById('profile-games').textContent       = gp;
+  document.getElementById('profile-round').textContent       = br;
+  document.getElementById('profile-total-score').textContent = ts;
+}
+
+async function saveGameResult(finalScore, finalRound) {
+  /* Coins: 1 coin per score point — сохраняем локально */
+  var prev = parseInt(localStorage.getItem('total_coins') || '0', 10) || 0;
+  localStorage.setItem('total_coins', String(prev + finalScore));
+
+  var best = getLS('nb_best_score', 0);
+  if (finalScore > best) setLS('nb_best_score', finalScore);
+
+  var br = getLS('nb_best_round', 0);
+  if (finalRound > br) setLS('nb_best_round', finalRound);
+
+  var gp = getLS('nb_games_played', 0);
+  setLS('nb_games_played', gp + 1);
+
+  var ts = getLS('nb_total_score', 0);
+  setLS('nb_total_score', ts + finalScore);
+
+  /* Сохраняем в БД через API */
+  if (TG && TG.initData) {
+    try {
+      await fetch(API + '/api/save-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          init_data: TG.initData,
+          score: finalScore,
+          round: finalRound
+        })
+      });
+    } catch(e) { console.log('Saved locally only'); }
+  }
+}
+
+/* =========================================================================
+   LOCALIZATION — complete RU / UZ dictionary
+   ========================================================================= */
+var I18N = {
+  ru: {
+    /* Nav */
+    navGames:       'Игры',
+    navShop:        'Магазин',
+    navProfile:     'Профиль',
+    /* Hub */
+    arcadeHub:      'Аркадный хаб',
+    featuredGames:  'Избранные игры',
+    gameDesc:       'Проведи для прицела. Разбивай блоки в 7 колонках. Каждый раунд — новый шар!',
+    playBtn:        'ИГРАТЬ',
+    arcadeBadge:    'Аркада',
+    /* Stats */
+    statBest:       'РЕКОРД',
+    statGames:      'Сыграно',
+    statRound:      'Раунд',
+    /* Shop */
+    shopTitle:      'Магазин',
+    comingSoon:     'Скоро',
+    comingSoonBadge:'Скоро',
+    /* Profile */
+    totalCoins:     'ВСЕГО КОИНОВ',
+    inviteBtn:      'ПРИГЛАСИТЬ ДРУГА (+500)',
+    bestScore:      'РЕКОРД',
+    gamesPlayed:    'Сыграно',
+    bestRound:      'Лучший раунд',
+    totalScore:     'Всего очков',
+    /* Settings */
+    settingsTitle:  'Настройки',
+    language:       'Язык',
+    languageSub:    'Язык интерфейса',
+    liteMode:       'Лайт-режим (без лагов)',
+    liteModeSub:    'Без частиц и тряски',
+    /* In-game HUD (canvas) */
+    hudScore:       'СЧЁТ',
+    hudRound:       'РАУНД',
+    /* In-game hint */
+    hint:           'СВАЙП ДЛЯ ПРИЦЕЛА · ОТПУСТИ ДЛЯ ВЫСТРЕЛА',
+    /* Pause menu */
+    paused:         'ПАУЗА',
+    resume:         '▶  Продолжить',
+    restart:        '↺  Заново',
+    endGame:        '✕  Выйти',
+    /* Game Over overlay */
+    gameOver:       'ИГРА ОКОНЧЕНА',
+    scoreLabel:     'Счёт',
+    roundReached:   'Раунд',
+    backToMenu:     '← В меню',
+    playAgain:      'Ещё раз',
+    /* Leaderboard */
+    navLeaderboard: 'Топ',
+    lbTitle:        'Таблица лидеров',
+    lbYou:          'Вы',
+    lbComingSoon:   'Рейтинг онлайн — Скоро'
+  },
+  uz: {
+    /* Nav */
+    navGames:       'O\'yinlar',
+    navShop:        'Do\'kon',
+    navProfile:     'Profil',
+    /* Hub */
+    arcadeHub:      'Arkada hub',
+    featuredGames:  'Tanlangan o\'yinlar',
+    gameDesc:       'Nishon olish uchun suring. 7 ustundagi bloklarni sindir. Har raundda yangi to\'p!',
+    playBtn:        'O\'YNASH',
+    arcadeBadge:    'Arkada',
+    /* Stats */
+    statBest:       'REKORD',
+    statGames:      'O\'ynaldi',
+    statRound:      'Raund',
+    /* Shop */
+    shopTitle:      'Do\'kon',
+    comingSoon:     'Tez kunda',
+    comingSoonBadge:'Tez kunda',
+    /* Profile */
+    totalCoins:     'JAMI TANGALAR',
+    inviteBtn:      'DO\'STNI CHORLASH (+500)',
+    bestScore:      'REKORD',
+    gamesPlayed:    'O\'ynaldi',
+    bestRound:      'Eng yaxshi raund',
+    totalScore:     'Jami ball',
+    /* Settings */
+    settingsTitle:  'Sozlamalar',
+    language:       'Til',
+    languageSub:    'Interfeys tili',
+    liteMode:       'Yengil rejim (qotmaslik uchun)',
+    liteModeSub:    'Zarrachalar va silkinsiz',
+    /* In-game HUD (canvas) */
+    hudScore:       'BALL',
+    hudRound:       'RAUND',
+    /* In-game hint */
+    hint:           'NISHON OL · QO\'YVOR VA OT',
+    /* Pause menu */
+    paused:         'PAUZA',
+    resume:         '▶  Davom etish',
+    restart:        '↺  Qayta',
+    endGame:        '✕  Chiqish',
+    /* Game Over overlay */
+    gameOver:       'O\'YIN TUGADI',
+    scoreLabel:     'Ball',
+    roundReached:   'Raund',
+    backToMenu:     '← Menyuga',
+    playAgain:      'Yana o\'ynash',
+    /* Leaderboard */
+    navLeaderboard: 'Top',
+    lbTitle:        'Yetakchilar jadvali',
+    lbYou:          'Siz',
+    lbComingSoon:   'Onlayn reyting — Tez kunda'
+  }
+};
+
+var currentLang = getLS('nb_lang', 'ru');
+
+/**
+ * updateLanguage — single function that applies ALL translations:
+ *   1) Iterates [data-i18n] elements and sets textContent
+ *   2) Syncs the language toggle button states
+ *   3) Stores choice in localStorage
+ * Called by the language pills AND at boot.
+ */
+function updateLanguage(lang){
+  currentLang = lang;
+  setLS('nb_lang', lang);
+
+  var dict = I18N[lang] || I18N['ru'];
+  document.querySelectorAll('[data-i18n]').forEach(function(el){
+    var key = el.getAttribute('data-i18n');
+    if (dict[key] !== undefined) el.textContent = dict[key];
+  });
+
+  /* Sync language pill highlight */
+  var btnRu = document.getElementById('lang-ru');
+  var btnUz = document.getElementById('lang-uz');
+  if (btnRu) btnRu.classList.toggle('active', lang === 'ru');
+  if (btnUz) btnUz.classList.toggle('active', lang === 'uz');
+}
+
+/* Legacy wrappers (other code calls these) */
+function applyLang(lang){ updateLanguage(lang); }
+function setLang(lang){ updateLanguage(lang); }
+
+/* =========================================================================
+   LITE MODE
+   ========================================================================= */
+function setLiteMode(val){
+  liteMode = !!val;
+  setLS('nb_lite_mode', liteMode);
+  /* Sync both toggle instances */
+  var tog1 = document.getElementById('lite-mode-toggle');
+  var tog2 = document.getElementById('pause-lite-toggle');
+  if (tog1) tog1.checked = liteMode;
+  if (tog2) tog2.checked = liteMode;
+}
+
+/* ---- Boot: restore persisted settings ---- */
+(function initSettings(){
+  var savedLang = getLS('nb_lang', 'ru');
+  updateLanguage(savedLang);
+
+  var savedLite = getLS('nb_lite_mode', false);
+  setLiteMode(savedLite);
+})();
+
+/* =========================================================================
+   CANVAS / DOM
+   ========================================================================= */
+var cvs          = document.getElementById('game');
+var ctx          = cvs.getContext('2d');
+var overlay      = document.getElementById('overlay');
+var finalEl      = document.getElementById('finalScore');
+var finalRoundEl = document.getElementById('finalRound');
+var backToMenuBtn = document.getElementById('backToMenuBtn');
+var againBtn     = document.getElementById('againBtn');
+var hintEl       = document.getElementById('hint');
+
+/* ---------- Layout ---------- */
+var COLS = 7;
+var DPR, W, H;
+var cell, gap, originX;
+var topMargin, bottomY, dangerY;
+var ballR;
+
+/* ---------- Tunables ---------- */
+var BALL_SPEED    = 9.2;
+var FIRE_GAP      = 70;     /* ms between ball launches */
+var SUBSTEPS      = 6;
+var MAX_BALL_LIFE = 13000;
+var TWEEN_DUR     = 300;    /* ms for block slide-down */
+
+/* ---------- Fast-forward & recall ---------- */
+var fastForward = false;   /* toggled by the FF button */
+
+/* ---------- Pause ---------- */
+var isPaused = false;
+
+/* ---------- Lite Mode ---------- */
+var liteMode = false;
+
+/* ---------- Game state ---------- */
+var phase = 'idle';   /* 'idle' | 'shooting' | 'transitioning' | 'over' */
+var round = 1;
+var score = 0;
+var ballCount = 1;    /* Always 1 at round 1, +1 per round */
+var launcherX;
+
+var blocks  = [];
+var pickups = [];
+var balls   = [];
+var floatTexts = [];   /* floating "+1" labels */
+
+var toFire = 0;
+var fireDir = {x:0, y:-1};
+var fireTimer = 0;
+var firstReturnX = null;
+var ghostBallX   = null; /* set the moment the first ball touches bottom */
+
+/* ---------- Aiming ---------- */
+var aiming   = false;
+var aimValid = false;
+var aimDir   = {x:0, y:-1};
+
+/* ---------- Screen Shake ---------- */
+var shakeX = 0, shakeY = 0;
+var shakeIntensity = 0;
+var shakeDur = 0;
+var shakeTimer = 0;
+
+/* ---------- Round Transition Tween ---------- */
+var tweenElapsed = 0;
+
+/* ---------- Particles (destroy juice) ---------- */
+var particles = [];
+
+/* ---------- Block UID counter (1-hit-per-pass fix) ---------- */
+var _uidCounter = 0;
+
+/* =========================================================================
+   Resize / layout
+   ========================================================================= */
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 3);
+  W = window.innerWidth;
+  H = window.innerHeight;
+
+  cvs.width  = Math.round(W * DPR);
+  cvs.height = Math.round(H * DPR);
+  cvs.style.width  = W + 'px';
+  cvs.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  /* ---- strict 7-column grid, columns fill full width ---- */
+  cell    = W / 7;
+  gap     = Math.max(3, Math.floor(cell * 0.07));
+  originX = 0;
+  ballR   = Math.max(5, Math.floor(cell * 0.12));
+
+  topMargin = Math.round(H * 0.11);
+
+  /* Bottom boundary = exactly 10 rows below topMargin */
+  dangerY = topMargin + 10 * cell;
+  bottomY = dangerY - ballR;
+  bottomY = bottomY - cell;   /* shift launcher up one row */
+
+  /* Expose launcher baseline to CSS for button positioning */
+  document.documentElement.style.setProperty('--bottom-line', (H - bottomY) + 'px');
+
+  if (launcherX == null) launcherX = W / 2;
+  launcherX = clamp(launcherX, ballR, W - ballR);
+
+  layoutPositions();
+}
+
+function layoutPositions() {
+  var size = cell - gap;
+  for (var i = 0; i < blocks.length; i++) {
+    var b = blocks[i];
+    b.size = size;
+    b.x = originX + b.col * cell + gap / 2;
+    b.y = topMargin + b.row * cell + gap / 2;
+  }
+  for (var i = 0; i < pickups.length; i++) {
+    var p = pickups[i];
+    p.r  = Math.max(6, Math.floor(cell * 0.16));
+    p.x  = originX + p.col * cell + cell / 2;
+    p.y  = topMargin + p.row * cell + cell / 2;
+  }
+}
+
+/* =========================================================================
+   Utility
+   ========================================================================= */
+function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
+function randInt(a, b){ return a + Math.floor(Math.random() * (b - a + 1)); }
+function lerp(a, b, t){ return a + (b - a) * t; }
+function easeOutCubic(t){ return 1 - Math.pow(1 - t, 3); }
+
+function roundRect(x, y, w, h, r){
+  r = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y,   x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x,   y+h, r);
+  ctx.arcTo(x,   y+h, x,   y,   r);
+  ctx.arcTo(x,   y,   x+w, y,   r);
+  ctx.closePath();
+}
+
+function hpColor(hp){
+  var t = clamp(hp / (8 + round * 2), 0, 1.25);
+  var hue;
+  if (t <= 1) hue = 175 - t * 175;
+  else        hue = 360 - (t - 1) * 160;
+  return {
+    fill:   'hsla(' + hue + ', 90%, 55%, 0.30)',
+    border: 'hsla(' + hue + ', 95%, 62%, 1)',
+    glow:   'hsla(' + hue + ', 100%, 60%, 0.85)',
+    hue:    hue
+  };
+}
+
+/* =========================================================================
+   Screen Shake
+   ========================================================================= */
+function triggerShake(intensity, duration){
+  if (intensity > shakeIntensity * (shakeTimer / (shakeDur || 1))){
+    shakeIntensity = intensity;
+    shakeDur = duration;
+    shakeTimer = duration;
+  }
+}
+
+function updateShake(dt){
+  if (liteMode){ shakeX = 0; shakeY = 0; return; }
+  if (shakeTimer > 0){
+    shakeTimer = Math.max(0, shakeTimer - dt);
+    var decay = shakeTimer / shakeDur;
+    var amp = shakeIntensity * decay * decay;   /* quadratic falloff */
+    shakeX = (Math.random() * 2 - 1) * amp;
+    shakeY = (Math.random() * 2 - 1) * amp;
+  } else {
+    shakeX = 0; shakeY = 0;
+  }
+}
+
+/* =========================================================================
+   Particles (block-destroy burst)
+   ========================================================================= */
+function spawnParticles(cx, cy, hue, count){
+  for (var i = 0; i < count; i++){
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 1.5 + Math.random() * 4;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1.5,
+      life: 1.0,
+      decay: 0.015 + Math.random() * 0.025,
+      size: 2 + Math.random() * 3.5,
+      hue: hue + (Math.random() * 40 - 20)
+    });
+  }
+}
+
+function updateParticles(dt){
+  if (liteMode){ particles.length = 0; return; }
+  var scale = dt / 16.667;
+  for (var i = particles.length - 1; i >= 0; i--){
+    var p = particles[i];
+    p.x += p.vx * scale;
+    p.y += p.vy * scale;
+    p.vy += 0.12 * scale;   /* gravity */
+    p.life -= p.decay * scale;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles(){
+  if (particles.length === 0) return;
+  ctx.save();
+  for (var i = 0; i < particles.length; i++){
+    var p = particles[i];
+    var a = Math.max(0, p.life);
+    ctx.globalAlpha = a;
+    ctx.shadowColor = 'hsla(' + p.hue + ',100%,65%,0.9)';
+    ctx.shadowBlur  = 10 * a;
+    ctx.fillStyle   = 'hsla(' + p.hue + ',95%,70%,' + a + ')';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* =========================================================================
+   Floating "+1" texts
+   ========================================================================= */
+function updateFloatTexts(dt){
+  var decay = dt / 1000;   /* 1.0 life = 1 second */
+  for (var i = floatTexts.length - 1; i >= 0; i--){
+    var f = floatTexts[i];
+    f.y   -= dt * 0.045;   /* drift upward ~45px/s */
+    f.life -= decay;
+    if (f.life <= 0) floatTexts.splice(i, 1);
+  }
+}
+
+function drawFloatTexts(){
+  if (floatTexts.length === 0) return;
+  ctx.save();
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '800 ' + Math.round(cell * 0.38) + 'px Orbitron, monospace';
+  for (var i = 0; i < floatTexts.length; i++){
+    var f = floatTexts[i];
+    var a = Math.max(0, f.life);
+    ctx.globalAlpha  = a;
+    ctx.shadowColor  = 'rgba(255,45,149,0.9)';
+    ctx.shadowBlur   = 12 * a;
+    ctx.fillStyle    = '#ff2d95';
+    ctx.fillText('+1', f.x, f.y);
+  }
+  ctx.restore();
+}
+
+/* =========================================================================
+   Block / row generation
+   =========================================================================
+   Rules:
+     - Exactly COLS=7 columns
+     - AT LEAST 4 out of 7 columns must contain a block
+     - Round 1: HP = exactly 1
+     - Later rounds: HP varies around the round number
+   ========================================================================= */
+function newHp(){
+  if (round === 1) return 1;   /* Round 1 always exactly 1 HP */
+  var base = round;
+  var r = Math.random();
+  if (r < 0.14) return base * 2;
+  if (r < 0.32) return base + randInt(0, 2);
+  return Math.max(1, base);
+}
+
+function spawnRow(){
+  /* ---- 1. Single shared HP for every block in this row = exactly round number ---- */
+  var rowHp = round;
+
+  /* ---- 2. 3-6 block columns (never all 7) ---- */
+  var blockCount = randInt(3, 6);
+
+  /* Fisher-Yates shuffle of all 7 column indices */
+  var cols = [0,1,2,3,4,5,6];
+  for (var i = cols.length - 1; i > 0; i--){
+    var j = randInt(0, i);
+    var tmp = cols[i]; cols[i] = cols[j]; cols[j] = tmp;
+  }
+  var blockCols = cols.slice(0, blockCount);
+  var freeCols  = cols.slice(blockCount);
+
+  /* ---- 3. Spawn blocks, all sharing rowHp ---- */
+  var size = cell - gap;
+  for (var i = 0; i < blockCols.length; i++){
+    var c = blockCols[i];
+    blocks.push({
+      col: c, row: 0,
+      hp: rowHp, maxHp: rowHp,
+      size: size,
+      uid: ++_uidCounter,
+      x: originX + c * cell + gap / 2,
+      y: topMargin + gap / 2
+    });
+  }
+
+  /* ---- 4. Guarantee exactly ONE +1 pickup in a random free column ---- */
+  var pc = freeCols[randInt(0, freeCols.length - 1)];
+  pickups.push({
+    col: pc, row: 0, collected: false,
+    r:  Math.max(6, Math.floor(cell * 0.16)),
+    x:  originX + pc * cell + cell / 2,
+    y:  topMargin + cell / 2
+  });
+}
+
+/* =========================================================================
+   Input — touch + mouse
+   ========================================================================= */
+function pointFrom(e){
+  var r = cvs.getBoundingClientRect();
+  var t = (e.touches && e.touches[0]) ? e.touches[0]
+        : (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0]
+        : e;
+  return { x: t.clientX - r.left, y: t.clientY - r.top };
+}
+
+function updateAim(p){
+  var dx = p.x - launcherX;
+  var dy = p.y - bottomY;
+  if (dy > -8) dy = -8;
+  var ang = Math.atan2(dy, dx);
+  var minA = 0.16;
+  if (ang > -minA) ang = -minA;
+  if (ang < -(Math.PI - minA)) ang = -(Math.PI - minA);
+  aimDir = { x: Math.cos(ang), y: Math.sin(ang) };
+  aimValid = true;
+}
+
+function onStart(e){
+  if (phase !== 'idle') return;
+  e.preventDefault();
+  aiming = true; aimValid = false;
+  updateAim(pointFrom(e));
+}
+function onMove(e){
+  if (!aiming) return;
+  e.preventDefault();
+  updateAim(pointFrom(e));
+}
+function onEnd(e){
+  if (!aiming) return;
+  e.preventDefault();
+  aiming = false;
+  if (aimValid) startVolley();
+}
+
+cvs.addEventListener('touchstart', onStart, { passive:false });
+cvs.addEventListener('touchmove',  onMove,  { passive:false });
+cvs.addEventListener('touchend',   onEnd,   { passive:false });
+cvs.addEventListener('touchcancel',onEnd,   { passive:false });
+cvs.addEventListener('mousedown',  onStart);
+window.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup',   onEnd);
+
+/* =========================================================================
+   Volley control
+   ========================================================================= */
+function startVolley(){
+  phase = 'shooting';
+  fireDir = { x:aimDir.x, y:aimDir.y };
+  toFire = ballCount;
+  fireTimer = 0;
+  firstReturnX = null;
+  ghostBallX   = null;
+  balls = [];
+  if (hintEl) hintEl.style.opacity = '0';
+}
+
+function spawnBall(){
+  balls.push({
+    x: launcherX,
+    y: bottomY - 1,
+    vx: fireDir.x * BALL_SPEED,
+    vy: fireDir.y * BALL_SPEED,
+    life: 0,
+    alive: true,
+    lastHitUid: -1   /* uid of last block damaged; prevents multi-hit per pass */
+  });
+}
+
+/* =========================================================================
+   Round Transition (smooth slide-down)
+   ========================================================================= */
+function beginTransition(){
+  /* snapshot current Y */
+  for (var i = 0; i < blocks.length; i++)  blocks[i].fromY = blocks[i].y;
+  for (var i = 0; i < pickups.length; i++) pickups[i].fromY = pickups[i].y;
+
+  /* increment row, recompute targets */
+  for (var i = 0; i < blocks.length; i++)  blocks[i].row += 1;
+  for (var i = 0; i < pickups.length; i++) pickups[i].row += 1;
+  layoutPositions();
+
+  /* store targets, snap back to from for tween */
+  for (var i = 0; i < blocks.length; i++){
+    blocks[i].toY = blocks[i].y;
+    blocks[i].y   = blocks[i].fromY;
+  }
+  for (var i = 0; i < pickups.length; i++){
+    pickups[i].toY = pickups[i].y;
+    pickups[i].y   = pickups[i].fromY;
+  }
+
+  tweenElapsed = 0;
+  phase = 'transitioning';
+}
+
+function updateTransition(dt){
+  tweenElapsed += dt;
+  var raw = Math.min(1, tweenElapsed / TWEEN_DUR);
+  var t   = easeOutCubic(raw);
+
+  for (var i = 0; i < blocks.length; i++){
+    blocks[i].y = lerp(blocks[i].fromY, blocks[i].toY, t);
+  }
+  for (var i = 0; i < pickups.length; i++){
+    pickups[i].y = lerp(pickups[i].fromY, pickups[i].toY, t);
+  }
+
+  if (raw >= 1){
+    /* snap to final */
+    for (var i = 0; i < blocks.length; i++)  blocks[i].y = blocks[i].toY;
+    for (var i = 0; i < pickups.length; i++) pickups[i].y = pickups[i].toY;
+
+    /* game-over check */
+    for (var i = 0; i < blocks.length; i++){
+      if (blocks[i].y + blocks[i].size >= dangerY){ gameOver(); return; }
+    }
+
+    spawnRow();
+    phase = 'idle';
+    ghostBallX = null;   /* clear ghost once next round is ready */
+  }
+}
+
+function endRound(){
+  round += 1;
+  /* ballCount intentionally NOT incremented here.
+     Extra balls come only from collecting +1 pickups mid-volley. */
+  if (firstReturnX != null) launcherX = clamp(firstReturnX, ballR, W - ballR);
+
+  pickups = pickups.filter(function(p){ return !p.collected; });
+
+  beginTransition();
+}
+
+/* =========================================================================
+   Physics — circle vs AABB, sub-stepped
+   =========================================================================
+   SCORING: score += block.maxHp when a block is destroyed.
+   ========================================================================= */
+function collideBall(b){
+  var hitAny = false;
+  for (var i = 0; i < blocks.length; i++){
+    var k = blocks[i];
+    var cx = clamp(b.x, k.x, k.x + k.size);
+    var cy = clamp(b.y, k.y, k.y + k.size);
+    var ddx = b.x - cx, ddy = b.y - cy;
+    var d2 = ddx*ddx + ddy*ddy;
+
+    if (d2 > ballR * ballR) continue;
+
+    hitAny = true;
+
+    var nx, ny;
+    if (ddx === 0 && ddy === 0){
+      var left   = b.x - k.x;
+      var right  = (k.x + k.size) - b.x;
+      var top    = b.y - k.y;
+      var bottom = (k.y + k.size) - b.y;
+      var m = Math.min(left, right, top, bottom);
+      if      (m === left)  { nx = -1; ny = 0; b.x = k.x - ballR; }
+      else if (m === right) { nx =  1; ny = 0; b.x = k.x + k.size + ballR; }
+      else if (m === top)   { nx = 0; ny = -1; b.y = k.y - ballR; }
+      else                  { nx = 0; ny =  1; b.y = k.y + k.size + ballR; }
+    } else {
+      var d = Math.sqrt(d2) || 0.0001;
+      nx = ddx / d; ny = ddy / d;
+      b.x = cx + nx * ballR;
+      b.y = cy + ny * ballR;
+    }
+
+    var dot = b.vx * nx + b.vy * ny;
+    if (dot < 0){
+      b.vx -= 2 * dot * nx;
+      b.vy -= 2 * dot * ny;
+    }
+
+    /* ---- strict 1 HP per pass: only damage if this is a new block contact ---- */
+    if (b.lastHitUid !== k.uid){
+      b.lastHitUid = k.uid;
+      k.hp -= 1;
+      if (k.hp <= 0){
+        var col = hpColor(1);
+        spawnParticles(k.x + k.size/2, k.y + k.size/2, col.hue, 14);
+        triggerShake(6, 180);
+        score += k.maxHp;
+        blocks.splice(i, 1);
+        /* Haptic feedback on block destroy */
+        try { if (TG && TG.HapticFeedback) TG.HapticFeedback.impactOccurred('medium'); } catch(e){}
+      } else {
+        triggerShake(2.5, 60);
+      }
+    }
+    return;
+  }
+
+  /* Ball touched no block this sub-step — clear stamp so future contacts work */
+  if (!hitAny) b.lastHitUid = -1;
+}
+
+function collectPickups(b){
+  for (var i = 0; i < pickups.length; i++){
+    var p = pickups[i];
+    if (p.collected) continue;
+    var dx = b.x - p.x, dy = b.y - p.y;
+    var rr = p.r + ballR;
+    if (dx*dx + dy*dy <= rr*rr){
+      p.collected = true;
+      ballCount += 1;
+      /* Spawn floating "+1" label */
+      floatTexts.push({ x: p.x, y: p.y, life: 1.0 });
+    }
+  }
+}
+
+function stepBall(b, scale){
+  var stepX = (b.vx * scale) / SUBSTEPS;
+  var stepY = (b.vy * scale) / SUBSTEPS;
+
+  for (var s = 0; s < SUBSTEPS; s++){
+    b.x += stepX;
+    b.y += stepY;
+
+    if (b.x - ballR < 0)      { b.x = ballR;     b.vx = Math.abs(b.vx); }
+    else if (b.x + ballR > W) { b.x = W - ballR; b.vx = -Math.abs(b.vx); }
+    if (b.y - ballR < 0)      { b.y = ballR;     b.vy = Math.abs(b.vy); }
+
+    if (b.y >= bottomY){
+      b.y = bottomY;
+      b.alive = false;
+      /* CRITICAL: first ball to land determines next launch origin AND ghost position */
+      if (firstReturnX === null){
+        firstReturnX = b.x;
+        ghostBallX   = b.x;   /* immediately draw ghost so player sees it */
+      }
+      return;
+    }
+
+    collideBall(b);
+    collectPickups(b);
+  }
+}
+
+/* =========================================================================
+   Update
+   ========================================================================= */
+function update(dt){
+  /* Apply 2x speed multiplier when fast-forward is active */
+  var tdt = fastForward ? dt * 2 : dt;
+
+  updateShake(tdt);
+  updateParticles(tdt);
+  updateFloatTexts(tdt);
+
+  if (phase === 'transitioning'){
+    updateTransition(tdt);
+    return;
+  }
+
+  if (phase !== 'shooting') return;
+  var scale = tdt / 16.6667;
+
+  if (toFire > 0){
+    fireTimer -= tdt;
+    while (toFire > 0 && fireTimer <= 0){
+      spawnBall();
+      toFire -= 1;
+      fireTimer += FIRE_GAP;
+    }
+  }
+
+  for (var i = 0; i < balls.length; i++){
+    var b = balls[i];
+    if (!b.alive) continue;
+    b.life += tdt;
+    if (b.life > MAX_BALL_LIFE && b.vy < 0) b.vy = Math.abs(b.vy);
+    stepBall(b, scale);
+  }
+
+  balls = balls.filter(function(b){ return b.alive; });
+
+  if (toFire === 0 && balls.length === 0){
+    endRound();
+  }
+}
+
+/* =========================================================================
+   Trajectory Preview — ONE bounce, gradient fade
+   ========================================================================= */
+function drawAim(){
+  if (!aiming || !aimValid || phase !== 'idle') return;
+
+  var pts = [];
+  var x  = launcherX, y = bottomY;
+  var dx = aimDir.x,  dy = aimDir.y;
+  var bounces = 0;
+  var cumDist = 0;
+  var STEP = 5;
+  var MAX_ITER = 480;
+
+  pts.push({x:x, y:y, dist:0});
+
+  for (var i = 0; i < MAX_ITER; i++){
+    var nx = x + dx * STEP;
+    var ny = y + dy * STEP;
+
+    var wallBounce = false;
+    if (nx - ballR < 0){
+      nx = 2 * ballR - nx; dx = Math.abs(dx); wallBounce = true;
+    } else if (nx + ballR > W){
+      nx = 2 * (W - ballR) - nx; dx = -Math.abs(dx); wallBounce = true;
+    }
+    if (ny - ballR < 0){
+      ny = 2 * ballR - ny; dy = Math.abs(dy); wallBounce = true;
+    }
+
+    var segLen = Math.sqrt((nx - x)*(nx - x) + (ny - y)*(ny - y));
+    cumDist += segLen;
+    x = nx; y = ny;
+
+    if (wallBounce){
+      pts.push({x:x, y:y, dist:cumDist});
+      bounces++;
+      if (bounces > 1) break;
+      continue;
+    }
+
+    /* block collision */
+    var hitBlock = false;
+    for (var j = 0; j < blocks.length; j++){
+      var k = blocks[j];
+      if (x > k.x - ballR && x < k.x + k.size + ballR &&
+          y > k.y - ballR && y < k.y + k.size + ballR){ hitBlock = true; break; }
+    }
+    if (hitBlock){
+      pts.push({x:x, y:y, dist:cumDist});
+      break;
+    }
+
+    if (y >= bottomY) break;
+
+    pts.push({x:x, y:y, dist:cumDist});
+  }
+
+  if (pts.length < 2) return;
+
+  var totalDist = pts[pts.length - 1].dist || 1;
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(25,246,255,0.75)';
+  for (var i = 0; i < pts.length; i++){
+    if (i > 0 && i < pts.length - 1 && i % 2 !== 0) continue;
+    var t   = pts[i].dist / totalDist;
+    var alpha = 0.92 * (1 - t);
+    if (alpha <= 0) continue;
+    var r = (3.8 - t * 2.0) * (1 + 0.12 * Math.sin(i * 0.35));
+    ctx.globalAlpha = alpha;
+    ctx.shadowBlur  = 10 * (1 - t);
+    ctx.fillStyle   = 'rgba(25,246,255,1)';
+    ctx.beginPath();
+    ctx.arc(pts[i].x, pts[i].y, Math.max(0.5, r), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /* bounce rings */
+  for (var i = 1; i < pts.length - 1; i++){
+    var p = pts[i];
+    var atWall = (p.x <= ballR + 2 || p.x >= W - ballR - 2 || p.y <= ballR + 2);
+    if (atWall){
+      var bt = p.dist / totalDist;
+      ctx.globalAlpha = 0.7 * (1 - bt);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(25,246,255,1)';
+      ctx.shadowBlur = 14;
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/* =========================================================================
+   Render helpers
+   ========================================================================= */
+function drawBackgroundGrid(){
+  ctx.save();
+  ctx.strokeStyle = 'rgba(80,120,255,0.05)';
+  ctx.lineWidth = 1;
+  var step = cell;
+  ctx.beginPath();
+  for (var gx = originX; gx <= W; gx += step){ ctx.moveTo(gx, 0); ctx.lineTo(gx, H); }
+  for (var gy = topMargin; gy <= H; gy += step){ ctx.moveTo(0, gy); ctx.lineTo(W, gy); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBlocks(){
+  ctx.save();
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  for (var i = 0; i < blocks.length; i++){
+    var b = blocks[i];
+    var c = hpColor(b.hp);
+
+    ctx.shadowColor = c.glow;
+    ctx.shadowBlur  = 16;
+    ctx.fillStyle   = c.fill;
+    roundRect(b.x, b.y, b.size, b.size, Math.max(6, b.size * 0.16));
+    ctx.fill();
+
+    ctx.shadowBlur  = 0;
+    ctx.lineWidth   = 2;
+    ctx.strokeStyle = c.border;
+    roundRect(b.x + 1, b.y + 1, b.size - 2, b.size - 2, Math.max(5, b.size * 0.15));
+    ctx.stroke();
+
+    ctx.fillStyle   = '#ffffff';
+    ctx.shadowColor = c.glow;
+    ctx.shadowBlur  = 8;
+    ctx.font = '800 ' + Math.max(12, Math.floor(b.size * 0.40)) + 'px Orbitron, monospace';
+    ctx.fillText(String(b.hp), b.x + b.size / 2, b.y + b.size / 2 + 1);
+    ctx.shadowBlur  = 0;
+  }
+  ctx.restore();
+}
+
+function drawPickups(){
+  ctx.save();
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  for (var i = 0; i < pickups.length; i++){
+    var p = pickups[i];
+    if (p.collected) continue;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.shadowColor = 'rgba(255,45,149,0.9)';
+    ctx.shadowBlur  = 14;
+    ctx.lineWidth   = 2.5;
+    ctx.strokeStyle = '#ff2d95';
+    ctx.stroke();
+    ctx.shadowBlur  = 0;
+    ctx.fillStyle   = '#ff8ec5';
+    ctx.font = '800 ' + Math.floor(p.r * 1.05) + 'px Orbitron, monospace';
+    ctx.fillText('+1', p.x, p.y + 1);
+  }
+  ctx.restore();
+}
+
+function drawBalls(){
+  ctx.save();
+  ctx.fillStyle   = '#ffffff';
+  ctx.shadowColor = 'rgba(255,255,255,0.95)';
+  ctx.shadowBlur  = 12;
+  for (var i = 0; i < balls.length; i++){
+    ctx.beginPath();
+    ctx.arc(balls[i].x, balls[i].y, ballR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* Ghost / dummy ball —————————————————————————————————————————————————————
+   Appears the instant the FIRST ball touches bottomY.
+   Remains visible while remaining balls are still in flight, clearly
+   marking where the next round will start.
+   ———————————————————————————————————————————————————————————————————————— */
+function drawGhostBall(){
+  if (ghostBallX === null) return;
+  if (phase !== 'shooting') return;   /* only while volley is in progress */
+
+  var pulse = 0.55 + 0.25 * Math.sin(Date.now() / 200);
+
+  ctx.save();
+
+  /* Outer dashed ring */
+  ctx.globalAlpha = pulse;
+  ctx.strokeStyle = 'rgba(25,246,255,0.9)';
+  ctx.lineWidth   = 2;
+  ctx.shadowColor = 'rgba(25,246,255,0.7)';
+  ctx.shadowBlur  = 12;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.arc(ghostBallX, bottomY, ballR + 4, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* Inner solid core */
+  ctx.globalAlpha = pulse * 0.6;
+  ctx.fillStyle   = 'rgba(25,246,255,0.7)';
+  ctx.shadowBlur  = 8;
+  ctx.beginPath();
+  ctx.arc(ghostBallX, bottomY, ballR * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawLauncher(){
+  ctx.save();
+  ctx.strokeStyle = 'rgba(25,246,255,0.18)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, bottomY + ballR + 2);
+  ctx.lineTo(W, bottomY + ballR + 2);
+  ctx.stroke();
+
+  if (phase === 'idle' || phase === 'transitioning'){
+    ctx.beginPath();
+    ctx.arc(launcherX, bottomY, ballR + 2, 0, Math.PI * 2);
+    ctx.fillStyle   = 'rgba(25,246,255,0.9)';
+    ctx.shadowColor = 'rgba(25,246,255,0.9)';
+    ctx.shadowBlur  = 16;
+    ctx.fill();
+
+    ctx.shadowBlur   = 0;
+    ctx.font         = 'bold 13px Jura, monospace';
+    ctx.fillStyle    = 'rgba(234,246,255,0.9)';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(String(ballCount), launcherX, bottomY - ballR - 4);
+  }
+  ctx.restore();
+}
+
+function drawHUD(){
+  ctx.save();
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  ctx.fillStyle   = '#ffffff';
+  ctx.shadowColor = 'rgba(25,246,255,0.8)';
+  ctx.shadowBlur  = 18;
+  ctx.font = '800 ' + Math.round(H * 0.045) + 'px Orbitron, monospace';
+  ctx.fillText(String(score), W / 2, topMargin * 0.62);
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle  = 'rgba(234,246,255,0.55)';
+  ctx.font = '600 ' + Math.round(H * 0.016) + 'px Jura, monospace';
+  ctx.fillText((I18N[currentLang] || I18N['ru']).hudScore, W / 2, topMargin * 0.30);
+
+  ctx.restore();
+}
+
+/* =========================================================================
+   Master render (screen shake via translate offset)
+   ========================================================================= */
+function render(){
+  ctx.clearRect(0, 0, W, H);
+
+  /* Apply screen shake as canvas-wide translation */
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  drawBackgroundGrid();
+  drawBlocks();
+  drawPickups();
+  drawParticles();
+  drawAim();
+  drawLauncher();
+  drawBalls();
+  drawGhostBall();   /* drawn inside shake so it moves with the canvas */
+
+  ctx.restore();
+
+  /* HUD outside shake so text stays still */
+  drawFloatTexts();
+  drawHUD();
+}
+
+/* =========================================================================
+   Game over / restart
+   ========================================================================= */
+function gameOver(){
+  phase = 'over';
+  finalEl.textContent      = String(score);
+  finalRoundEl.textContent = String(round);
+
+  /* Persist to localStorage */
+  saveGameResult(score, round);
+
+  /* Reapply translations so overlay text matches current language */
+  updateLanguage(currentLang);
+
+  overlay.classList.add('show');
+}
+
+function resetGame(){
+  /* Dismiss pause menu if open */
+  isPaused = false;
+  if (pauseMenu) pauseMenu.classList.remove('show');
+  last = performance.now();
+
+  round = 1;
+  score = 0;
+  ballCount = 1;     /* ALWAYS exactly 1 ball at round 1 */
+  launcherX = W / 2;
+  blocks = []; pickups = []; balls = []; particles = []; floatTexts = [];
+  _uidCounter = 0;
+  toFire = 0; firstReturnX = null; ghostBallX = null;
+  shakeTimer = 0; shakeX = 0; shakeY = 0;
+  phase = 'idle';
+  resetFastForward();
+  overlay.classList.remove('show');
+  if (hintEl) hintEl.style.opacity = '1';
+  spawnRow();
+}
+
+/* ---- Overlay buttons ---- */
+backToMenuBtn.addEventListener('click', function(){
+  overlay.classList.remove('show');
+  showHub('games');
+});
+
+againBtn.addEventListener('click', function(){
+  overlay.classList.remove('show');
+  resetGame();
+});
+
+/* ---- Fast-Forward (2x) toggle ---- */
+var ffBtn     = document.getElementById('ff-btn');
+var recallBtn = document.getElementById('recall-btn');
+
+function resetFastForward(){
+  fastForward = false;
+  if (ffBtn) ffBtn.classList.remove('active-state');
+}
+
+ffBtn.addEventListener('click', function(){
+  fastForward = !fastForward;
+  ffBtn.classList.toggle('active-state', fastForward);
+});
+
+/* ---- Recall: instantly end the current shooting phase ---- */
+recallBtn.addEventListener('click', function(){
+  if (phase !== 'shooting') return;
+
+  /* Cancel all queued unfired balls */
+  toFire    = 0;
+  fireTimer = 0;
+
+  /* Teleport every in-flight ball to the bottom boundary */
+  for (var i = 0; i < balls.length; i++){
+    var b = balls[i];
+    if (!b.alive) continue;
+    if (firstReturnX === null){
+      firstReturnX = b.x;
+      ghostBallX   = b.x;
+    }
+    b.y     = bottomY;
+    b.alive = false;
+  }
+  balls = [];
+
+  endRound();
+});
+
+/* =========================================================================
+   Pause / Resume / Restart / End Game
+   ========================================================================= */
+var pauseBtn   = document.getElementById('pause-btn');
+var pauseMenu  = document.getElementById('pause-menu');
+var resumeBtn  = document.getElementById('resume-btn');
+var restartBtn = document.getElementById('restart-btn');
+var endGameBtn = document.getElementById('end-game-btn');
+
+function openPause(){
+  isPaused = true;
+  pauseMenu.classList.add('show');
+  /* Mirror live liteMode state into the pause toggle */
+  var tog = document.getElementById('pause-lite-toggle');
+  if (tog) tog.checked = liteMode;
+}
+
+function closePause(){
+  isPaused = false;
+  pauseMenu.classList.remove('show');
+  /* Reset timestamp so dt doesn't spike after a long pause */
+  last = performance.now();
+}
+
+/* Pause button — only active during game */
+pauseBtn.addEventListener('click', function(){ openPause(); });
+
+/* Resume — close overlay and continue */
+resumeBtn.addEventListener('click', function(){ closePause(); });
+
+/* Restart — reset full game state and keep playing */
+restartBtn.addEventListener('click', function(){
+  closePause();
+  resetGame();
+});
+
+/* End Game — save result, skip game-over modal, return to hub */
+endGameBtn.addEventListener('click', function(){
+  closePause();
+  saveGameResult(score, round);
+  overlay.classList.remove('show');
+  showHub('games');
+  setTimeout(function(){ resetGame(); }, 50);
+});
+
+document.getElementById('invite-btn').addEventListener('click', function(){
+  var botUsername = 'YourBotUsername'; /* <-- replace with your actual bot username */
+  var user = (TG && TG.initDataUnsafe && TG.initDataUnsafe.user) ? TG.initDataUnsafe.user : null;
+  var refId = user ? user.id : 'guest';
+  var link = 'https://t.me/' + botUsername + '?start=ref_' + refId;
+  var text = encodeURIComponent('🎮 Play Neon Breaker with me and get a bonus!');
+  var shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + text;
+  if (TG && TG.openTelegramLink) {
+    TG.openTelegramLink(shareUrl);
+  } else {
+    window.open(shareUrl, '_blank');
+  }
+});
+
+/* =========================================================================
+   Main loop
+   ========================================================================= */
+var last = performance.now();
+function loop(now){
+  if (isPaused){ requestAnimationFrame(loop); return; }
+  var dt = Math.min(34, now - last);
+  last = now;
+  if (gameWrapper.classList.contains('active')){
+    if (phase !== 'over') update(dt);
+    render();
+  }
+  requestAnimationFrame(loop);
+}
+
+/* =========================================================================
+   Boot
+   ========================================================================= */
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', function(){ setTimeout(resize, 150); });
+
+resize();
+refreshHubStats();
+refreshProfileStats();
+
+/* Start on the Hub, not in the game */
+showHub('profile');
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
